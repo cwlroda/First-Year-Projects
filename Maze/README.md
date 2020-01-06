@@ -1,5 +1,5 @@
 # Maze
-Uses three different methods to solve a maze
+Uses three different methods to solve a maze:
 
 1) Random Path
 
