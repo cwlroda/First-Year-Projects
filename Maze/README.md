@@ -1,6 +1,10 @@
-# Huffman Encoding
-Encrypts plain text into Huffman Compression format
+# Maze
+Uses three different methods to solve a maze
 
-Huffman coding is a lossless data compression algorithm. In this algorithm, a variable-length code is assigned to input different characters. The code length is related to how frequently characters are used. Most frequent characters have the smallest codes and longer codes for least frequent characters.
+1) Random Path
 
-View Huffman.pdf for the full specifications
+2) Breadth-First Search (Queue)
+
+3) Depth-First Search (Stack)
+
+View Maze.pdf for the full specifications
