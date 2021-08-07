@@ -3,13 +3,20 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <unordered_map>
 using namespace std;
 
 vector<string> transcript;
-vector<vector<string> > allstates;
+vector<vector<string>> allstates;
+unordered_map<string, pair<int, int>> directions;
+
+int run();
+void reset();
+void welcome();
 
 void default_grid(vector<string>& board);
-void print_grid(vector<string>& board);
+void print_grid(vector<string> &board);
+void build_directions();
 
 bool next_move(vector<string>& board, string& piece, string& nextpiece);
 bool placer(int row, int col, vector<string>& board, string& piece, string& nextpiece);
@@ -21,35 +28,24 @@ void possible_moves(vector<string>& board, string & piece);
 
 int twod_to_oned(int row, int col, int rowlen);
 
-void flipN(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipNE(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipE(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipSE(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipS(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipSW(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipW(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-void flipNW(int row, int col, vector<string>& board, string& piece, string& nextpiece);
-
+void flip(int row, int col, vector<string> &board, string &piece, string &nextpiece, pair<string, pair<int, int>> dir);
 void switch_player(string& piece, string& nextpiece);
 
 void move_score(vector<string>& board);
-void print_score(vector<string>& board);
-void record_move(vector<string>& transcript, string& move, string& piece);
+void print_score(vector<string> &board);
+void print_moves();
+void record_move(vector<string> &transcript, string &move, string &piece);
+void viewAnalysis();
 
-int main() {
-    system("clear");
-
-    cout << "Welcome to Othello" << endl;
-    cout << "Player 1 is X, Player 2 is O" << endl;
-    cout << "Enter board notation as next move" << endl;
-    cout << "e.g. A1 places a piece on the top left corner square" << endl;
-    cout << "Type 'undo' to undo move" << endl << endl;
+int run() {
+    welcome();
 
     vector<string> board;
-    string piece = "   X   ";
-    string nextpiece = "   O   ";
+    string piece = "   O   ";
+    string nextpiece = "   X   ";
     bool valid_move = false;
 
+    build_directions();
     default_grid(board);
     print_grid(board);
     move_score(board);
@@ -59,14 +55,13 @@ int main() {
         while (!valid_move) {
             valid_move = next_move(board, piece, nextpiece);
 
-            system("clear");
-            cout << "Welcome to Othello" << endl;
-            cout << "Player 1 is X, Player 2 is O" << endl;
-            cout << "Enter board notation as next move" << endl;
-            cout << "e.g. A1 places a piece on the top left corner square" << endl;
-            cout << "Type 'undo' to undo move" << endl << endl;
-
+            welcome();
             print_grid(board);
+
+            if (!valid_move) {
+                cout << "Invalid move!" << endl << endl;
+            }
+
             move_score(board);
         }
 
@@ -77,7 +72,33 @@ int main() {
     cout << "Game Over!" << endl << endl;
     print_score(board);
 
+    cout << "Enter N to start a new game, V to view analysis, or any other key to quit" << endl;
+    string option;
+    cin >> option;
+
+    if (option == "n" || option == "N") {
+        return 1;
+    }
+
+    else if (option == "v" || option == "V") {
+        viewAnalysis();
+    }
+
     return 0;
+}
+
+void reset() {
+    transcript.clear();
+    allstates.clear();
+}
+
+void welcome() {
+    system("clear");
+    cout << "Welcome to Othello" << endl;
+    cout << "Player 1 is O, Player 2 is X" << endl;
+    cout << "Enter board notation as next move" << endl;
+    cout << "e.g. A1 places a piece on the top left corner square" << endl;
+    cout << "Type 'undo' to undo move" << endl << endl;
 }
 
 void default_grid(vector<string>& board) {
@@ -115,6 +136,17 @@ void print_grid(vector<string>& board) {
 
     cout << "\t-----------------------------------------------------------------";
     cout << endl << endl;
+}
+
+void build_directions() {
+    directions["N"] = make_pair(-1, 0);
+    directions["NE"] = make_pair(-1, 1);
+    directions["E"] = make_pair(0, 1);
+    directions["SE"] = make_pair(1, 1);
+    directions["S"] = make_pair(1, 0);
+    directions["SW"] = make_pair(1, -1);
+    directions["W"] = make_pair(0, -1);
+    directions["NW"] = make_pair(-1, -1);
 }
 
 bool game_over(vector<string>& board, string& piece, string& nextpiece) {
@@ -161,14 +193,9 @@ bool available_move(vector<string>& board, string& piece, string& nextpiece) {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             if (board[twod_to_oned(i, j, 8)] == "\t") {
-                flipN(i, j, boardtmp, piece, nextpiece);
-                flipNE(i, j, boardtmp, piece, nextpiece);
-                flipE(i, j, boardtmp, piece, nextpiece);
-                flipSE(i, j, boardtmp, piece, nextpiece);
-                flipS(i, j, boardtmp, piece, nextpiece);
-                flipSW(i, j, boardtmp, piece, nextpiece);
-                flipW(i, j, boardtmp, piece, nextpiece);
-                flipNW(i, j, boardtmp, piece, nextpiece);
+                for (const auto &dir : directions) {
+                    flip(i, j, boardtmp, piece, nextpiece, dir);
+                }
             }
         }
     }
@@ -189,7 +216,7 @@ int twod_to_oned(int row, int col, int rowlen) {
 }
 
 bool next_move(vector<string>& board, string& piece, string& nextpiece) {
-    if (piece == "   X   ") {
+    if (piece == "   O   ") {
         cout << "Player 1's turn:" << endl << endl;
     }
 
@@ -257,131 +284,8 @@ bool next_move(vector<string>& board, string& piece, string& nextpiece) {
 bool placer(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
     vector<string> boardtmp = board;
 
-    if (row == 0) {
-        if (col == 0) {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col+1, 8)] == nextpiece))) {
-                flipE(row, col, board, piece, nextpiece);
-                flipSE(row, col, board, piece, nextpiece);
-                flipS(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-
-        else if (col == 7) {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col-1, 8)] == nextpiece))) {
-                flipS(row, col, board, piece, nextpiece);
-                flipSW(row, col, board, piece, nextpiece);
-                flipW(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-
-        else {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col-1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col+1, 8)] == nextpiece))) {
-                flipE(row, col, board, piece, nextpiece);
-                flipSE(row, col, board, piece, nextpiece);
-                flipS(row, col, board, piece, nextpiece);
-                flipSW(row, col, board, piece, nextpiece);
-                flipW(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-    }
-
-    else if (col == 0) {
-        if (row == 7) {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col+1, 8)] == nextpiece))) {
-                flipN(row, col, board, piece, nextpiece);
-                flipNE(row, col, board, piece, nextpiece);
-                flipE(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-
-        else {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col+1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col+1, 8)] == nextpiece))) {
-                flipN(row, col, board, piece, nextpiece);
-                flipNE(row, col, board, piece, nextpiece);
-                flipE(row, col, board, piece, nextpiece);
-                flipSE(row, col, board, piece, nextpiece);
-                flipS(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-    }
-
-    else if (row == 7) {
-        if (col == 7) {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col-1, 8)] == nextpiece))) {
-                flipW(row, col, board, piece, nextpiece);
-                flipNW(row, col, board, piece, nextpiece);
-                flipN(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-
-        else {
-            if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col-1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col+1, 8)] == nextpiece))) {
-                flipW(row, col, board, piece, nextpiece);
-                flipNW(row, col, board, piece, nextpiece);
-                flipN(row, col, board, piece, nextpiece);
-                flipNE(row, col, board, piece, nextpiece);
-                flipE(row, col, board, piece, nextpiece);
-            }
-
-            else {
-                return false;
-            }
-        }
-    }
-
-    else if (col == 7) {
-        if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col-1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col-1, 8)] == nextpiece))) {
-            flipS(row, col, board, piece, nextpiece);
-            flipSW(row, col, board, piece, nextpiece);
-            flipW(row, col, board, piece, nextpiece);
-            flipNW(row, col, board, piece, nextpiece);
-            flipN(row, col, board, piece, nextpiece);
-        }
-
-        else {
-            return false;
-        }
-    }
-
-    else {
-        if ((board[twod_to_oned(row, col, 8)] == "\t") && ((board[twod_to_oned(row-1, col, 8)] == nextpiece) || (board[twod_to_oned(row+1, col, 8)] == nextpiece) || (board[twod_to_oned(row, col-1, 8)] == nextpiece) || (board[twod_to_oned(row, col+1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col-1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col-1, 8)] == nextpiece) || (board[twod_to_oned(row-1, col+1, 8)] == nextpiece) || (board[twod_to_oned(row+1, col+1, 8)] == nextpiece))) {
-            flipN(row, col, board, piece, nextpiece);
-            flipNE(row, col, board, piece, nextpiece);
-            flipE(row, col, board, piece, nextpiece);
-            flipSE(row, col, board, piece, nextpiece);
-            flipS(row, col, board, piece, nextpiece);
-            flipSW(row, col, board, piece, nextpiece);
-            flipW(row, col, board, piece, nextpiece);
-            flipNW(row, col, board, piece, nextpiece);
-        }
-
-        else {
-            return false;
-        }
+    for (const auto &dir : directions) {
+        flip(row, col, board, piece, nextpiece, dir);
     }
 
     if (boardtmp == board) {
@@ -391,218 +295,48 @@ bool placer(int row, int col, vector<string>& board, string& piece, string& next
     return true;
 }
 
-void flipN(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
+bool flipCheck(int row, int col, string dir) {
+    if (dir == "N") {return row > 1;}
+    else if (dir == "NE") {return row > 1 && col < 6;}
+    else if (dir == "E") {return col < 6;}
+    else if (dir == "SE") {return row < 6 && col < 6;}
+    else if (dir == "S") {return row < 6;}
+    else if (dir == "SW") {return row < 6 && col > 1;}
+    else if (dir == "W") {return col > 1;}
+    else if (dir == "NW") {return row > 1 && col > 1;}
 
-    while (rowtmp > 1 && (board[twod_to_oned(rowtmp-2, coltmp, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp-2, coltmp, 8)] == piece) && (board[twod_to_oned(rowtmp2-1, coltmp2, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        rowtmp--;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2-1, coltmp2, 8)] != piece) && (board[twod_to_oned(rowtmp2-1, coltmp2, 8)] != "\t") && (rowtmp2 > 1)) {
-            board[twod_to_oned(rowtmp2-1, coltmp2, 8)] = piece;
-            rowtmp2--;
-        }
-    }
+    return false;
 }
 
-void flipNE(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
+void flip(int row, int col, vector<string> &board, string &piece, string &nextpiece, pair<string, pair<int,int>> dir) {
     bool check = false;
     int rowtmp = row;
     int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
 
-    while (rowtmp > 1 && coltmp < 6 && (board[twod_to_oned(rowtmp-2, coltmp+2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp-2, coltmp+2, 8)] == piece) && (board[twod_to_oned(rowtmp2-1, coltmp2+1, 8)] == nextpiece)) {
+    int roffset = dir.second.first;
+    int coffset = dir.second.second;
+
+    while (flipCheck(row, col, dir.first) &&
+           (board[twod_to_oned(row + (roffset * 2), col + (coffset * 2), 8)] != "\t")) {
+        if ((board[twod_to_oned(row + (roffset * 2), col + (coffset * 2), 8)] == piece) &&
+            (board[twod_to_oned(rowtmp + roffset, coltmp + coffset, 8)] == nextpiece)) {
             check = true;
             break;
         }
 
-        rowtmp--;
-        coltmp++;
+        row += roffset;
+        col += coffset;
     }
 
     if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
+        board[twod_to_oned(rowtmp, coltmp, 8)] = piece;
 
-        while ((board[twod_to_oned(rowtmp2-1, coltmp2+1, 8)] != piece) && (board[twod_to_oned(rowtmp2-1, coltmp2+1, 8)] != "\t") && (rowtmp2 > 1 && coltmp2 < 6)) {
-            board[twod_to_oned(rowtmp2-1, coltmp2+1, 8)] = piece;
-            rowtmp2--;
-            coltmp2++;
-        }
-    }
-}
-
-void flipE(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (coltmp < 6 && (board[twod_to_oned(rowtmp, coltmp+2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp, coltmp+2, 8)] == piece) && (board[twod_to_oned(rowtmp2, coltmp2+1, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        coltmp++;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2, coltmp2+1, 8)] != piece) && (board[twod_to_oned(rowtmp2, coltmp2+1, 8)] != "\t") && (coltmp2 < 6)) {
-            board[twod_to_oned(rowtmp2, coltmp2+1, 8)] = piece;
-            coltmp2++;
-        }
-    }
-}
-
-void flipSE(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (rowtmp < 6 && coltmp < 6 && (board[twod_to_oned(rowtmp+2, coltmp+2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp+2, coltmp+2, 8)] == piece) && (board[twod_to_oned(rowtmp2+1, coltmp2+1, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        rowtmp++;
-        coltmp++;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2+1, coltmp2+1, 8)] != piece) && (board[twod_to_oned(rowtmp2+1, coltmp2+1, 8)] != "\t") && (rowtmp2 < 6 && coltmp2 < 6)) {
-            board[twod_to_oned(rowtmp2+1, coltmp2+1, 8)] = piece;
-            rowtmp2++;
-            coltmp2++;
-        }
-    }
-}
-
-void flipS(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (rowtmp < 6 && (board[twod_to_oned(rowtmp+2, coltmp, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp+2, coltmp, 8)] == piece) && (board[twod_to_oned(rowtmp2+1, coltmp2, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        rowtmp++;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2+1, coltmp2, 8)] != piece) && (board[twod_to_oned(rowtmp2+1, coltmp2, 8)] != "\t") && (rowtmp2 < 6)) {
-            board[twod_to_oned(rowtmp2+1, coltmp2, 8)] = piece;
-            rowtmp2++;
-        }
-    }
-}
-
-void flipSW(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (rowtmp < 6 && coltmp > 1 && (board[twod_to_oned(rowtmp+2, coltmp-2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp+2, coltmp-2, 8)] == piece) && (board[twod_to_oned(rowtmp2+1, coltmp2-1, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        rowtmp++;
-        coltmp--;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2+1, coltmp2-1, 8)] != piece) && (board[twod_to_oned(rowtmp2+1, coltmp2-1, 8)] != "\t") && (rowtmp2 < 6 && coltmp2 > 1)) {
-            board[twod_to_oned(rowtmp2+1, coltmp2-1, 8)] = piece;
-            rowtmp2++;
-            coltmp2--;
-        }
-    }
-}
-
-void flipW(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (coltmp > 1 && (board[twod_to_oned(rowtmp, coltmp-2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp, coltmp-2, 8)] == piece) && (board[twod_to_oned(rowtmp2, coltmp2-1, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        coltmp--;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2, coltmp2-1, 8)] != piece) && (board[twod_to_oned(rowtmp2, coltmp2-1, 8)] != "\t") && (coltmp2 > 1)) {
-            board[twod_to_oned(rowtmp2, coltmp2-1, 8)] = piece;
-            coltmp2--;
-        }
-    }
-}
-
-void flipNW(int row, int col, vector<string>& board, string& piece, string& nextpiece) {
-    bool check = false;
-    int rowtmp = row;
-    int coltmp = col;
-    int rowtmp2 = row;
-    int coltmp2 = col;
-
-    while (rowtmp > 1 && coltmp > 1 && (board[twod_to_oned(rowtmp-2, coltmp-2, 8)] != "\t")) {
-        if ((board[twod_to_oned(rowtmp-2, coltmp-2, 8)] == piece) && (board[twod_to_oned(rowtmp2-1, coltmp2-1, 8)] == nextpiece)) {
-            check = true;
-            break;
-        }
-
-        rowtmp--;
-        coltmp--;
-    }
-
-    if (check) {
-        board[twod_to_oned(rowtmp2, coltmp2, 8)] = piece;
-
-        while ((board[twod_to_oned(rowtmp2-1, coltmp2-1, 8)] != piece) && (board[twod_to_oned(rowtmp2-1, coltmp2-1, 8)] != "\t") && (rowtmp2 > 1 && coltmp2 > 1)) {
-            board[twod_to_oned(rowtmp2-1, coltmp2-1, 8)] = piece;
-            rowtmp2--;
-            coltmp2--;
+        while (flipCheck(rowtmp, coltmp, dir.first) &&
+               (board[twod_to_oned(rowtmp + roffset, coltmp + coffset, 8)] != piece) &&
+               (board[twod_to_oned(rowtmp + roffset, coltmp + coffset, 8)] != "\t")) {
+            board[twod_to_oned(rowtmp + roffset, coltmp + coffset, 8)] = piece;
+            rowtmp += roffset;
+            coltmp += coffset;
         }
     }
 }
@@ -628,8 +362,8 @@ void move_score(vector<string>& board) {
         }
     }
 
-    cout << "X :\t" << xcount << endl;
-    cout << "O :\t" << ocount << endl << endl;
+    cout << "O :\t" << ocount << endl;
+    cout << "X :\t" << xcount << endl << endl;
 }
 
 void print_score(vector<string>& board) {
@@ -646,47 +380,91 @@ void print_score(vector<string>& board) {
         }
     }
 
-    cout << "Player 1 (X) has " << xcount << " pieces" << endl;
-    cout << "Player 2 (O) has " << ocount << " pieces" << endl << endl;
+    cout << "Player 1 (O) has " << xcount << " pieces" << endl;
+    cout << "Player 2 (X) has " << ocount << " pieces" << endl << endl;
 
     if (xcount > ocount) {
-        cout << "Player 1 (X) wins!";
+        cout << "Player 1 (O) wins!";
     }
 
     else if (ocount > xcount) {
-        cout << "Player 2 (O) wins!";
+        cout << "Player 2 (X) wins!";
     }
 
-    else if (xcount == ocount) {
+    else {
         cout << "It's a draw!";
     }
 
+    cout << endl << endl;
+    print_moves();
     cout << endl << endl << endl;
 }
 
-void record_move(vector<string>& transcript, string& move, string& piece) {
+void print_moves() {
+    cout << "Moves:" << endl;
+
     string filename = "moves.txt";
     ofstream outfile;
 
     outfile.open(filename.c_str());
 
+    for (int i = 0; i < transcript.size(); i += 2) {
+        cout << (i / 2) + 1 << "\t" << transcript[i] << "\t" << transcript[i+1] << endl;
+        outfile << (i / 2) + 1 << "\t" << transcript[i] << "\t" << transcript[i+1] << endl;
+    }
+
+    outfile.close();
+}
+
+void record_move(vector<string>& transcript, string& move, string& piece) {
     if (move[0] >= 97 && move[0] <= 104) {
         move[0] -= 32;
     }
 
     if (move != "undo") {
-        if (piece == "   X   ") {
-            transcript.push_back("X\t" + move);
+        transcript.push_back(move);
+    }
+}
+
+void viewAnalysis() {
+    int state = allstates.size() - 1;
+    string option;
+
+    system("clear");
+    cout << "Analysis" << endl;
+    cout << "Enter N to view next move, and P to view previous move" << endl;
+    cout << "========" << endl << endl;
+
+    print_grid(allstates[state]);
+
+    do {
+        cin >> option;
+
+        if (option == "n" || option == "N") {
+            if (state < allstates.size() - 1) {
+                state++;
+            }
         }
 
-        else if (piece == "   O   ") {
-            transcript.push_back("O\t" + move);
+        else if (option == "p" || option == "P") {
+            if (state > 0) {
+                state--;
+            }
         }
-    }
 
-    for (int i = 0; i < transcript.size(); i++) {
-        outfile << i+1 << "\t" << transcript[i] << endl;
-    }
+        system("clear");
+        cout << "Analysis" << endl;
+        cout << "Enter N to view next move, P to view previous move, and Q to exit" << endl;
+        cout << "========" << endl << endl;
 
-    outfile.close();
+        print_grid(allstates[state]);
+    } while (option != "q" || option != "Q");
+}
+
+int main() {
+    while (run()) {
+        reset();
+    };
+
+    return 0;
 }
